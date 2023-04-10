@@ -1,11 +1,12 @@
 # REFS:
 # https://github.com/ProcursusTeam/Procursus/tree/main/makefiles
 # https://github.com/kabiroberai/darwin-tools-linux/blob/master/prepare-toolchain
+# https://sonarsource.atlassian.net/browse/CPP-3285
+# DEV:
+# https://github.com/llvm/llvm-project/issues/45959
 # https://github.com/ClangBuiltLinux/tc-build/issues/150
 # https://twitter.com/noztol/status/1277354097788715009
-# https://github.com/llvm/llvm-project/issues/45959
 # https://stackoverflow.com/questions/2725255/create-statically-linked-binary-that-uses-getaddrinfo
-# https://sonarsource.atlassian.net/browse/CPP-3285
 name: Build
 
 on:
@@ -39,7 +40,7 @@ jobs:
       - name: Build LLVM/Clang
         run: |
           mkdir build && cd build
-          cmake -G "Unix Makefiles" -DLLVM_ENABLE_PROJECTS=clang \
+          cmake -G "Unix Makefiles" -DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi" \
             -DLLVM_LINK_LLVM_DYLIB=ON \
             -DLLVM_ENABLE_LIBXML2=OFF \
             -DLLVM_ENABLE_ZLIB=OFF \

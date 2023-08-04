@@ -40,18 +40,18 @@ jobs:
 
           run: |
             neofetch
-            apk add build-base cmake ninja make zlib-dev git python3 python3-dev libgcc libstdc++ gcc autoconf automake openssl-dev openssl-libs-static coreutils libtool pkgconf
+            apk add build-base cmake ninja make zlib-dev git python3 python3-dev libgcc libstdc++ gcc g++ gcc-cross-embedded g++-cross-embedded autoconf automake openssl-dev openssl-libs-static coreutils libtool pkgconf
             mkdir -p $HOME/linux/iphone/ $HOME/libplist
 
             echo "Build libplist"
-            git clone --depth=1 https://github.com/libimobiledevice/libplist
+            git clone --depth=1 https://github.com/qnwerhtyycui/libplist
             cd libplist
             ./autogen.sh --prefix="$HOME/libplist" --without-cython
             make -j$(nproc --all) install
             cd ../
 
             echo "Build ldid"
-            git clone --depth=1 https://github.com/ProcursusTeam/ldid
+            git clone --depth=1 https://github.com/qnwerhtyycui/ldid
             cd ldid
             make -j$(nproc --all) DESTDIR="$HOME/linux/iphone/" \
               PREFIX="" \
@@ -85,6 +85,7 @@ jobs:
               -DCMAKE_INSTALL_PREFIX="$HOME/linux/iphone/" \
               ../llvm
             ninja -j$(nproc --all) install
+            cd ,,/
 
             echo "Build tapi"
             git clone --depth=1 https://github.com/tpoechtrager/apple-libtapi
@@ -121,6 +122,7 @@ jobs:
             git clone --depth=1 https://github.com/qnwerhtyycui/cctools-port
             cd cctools-port/cctools
             ./configure --prefix="$HOME/cctools/" \
+              --host=i386-pc-linux-musl
               --target=aarch64-apple-darwin14 \
               --enable-tapi-support \
               --with-libtapi="$HOME/cctools/" \

@@ -17,168 +17,127 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
-      - name: LLVM/Clang prep
-        run: |
-          sudo dpkg --add-architecture i386
-  
-          sudo apt-get update
-          sudo apt-get install libc6-dev-i386 libstdc++-12-dev:i386 libncurses5:i386 libncursesw5:i386 libreadline-dev:i386 zlib1g-dev:i386 gdb:i386 libxml2:i386 libx11-dev:i386 libxrandr-dev:i386 libxinerama-dev:i386 libxi-dev:i386
-          sudo apt install build-essential \
-            autoconf \
-            automake \
-            cmake \
-            coreutils \
-            git \
-            gcc-12 \
-            g++-12 \
-            libssl-dev:i386 \
-            libtool \
-            make \
-            pkg-config \
-            python3
-          sudo apt-get install gcc-12-multilib \
-            g++-12-multilib
-          # https://github.com/macports/macports-ports/blob/01ec793c58620cfa359558fd6af848e4176ae0fe/devel/libtapi/Portfile#L57
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 60 --slave /usr/bin/g++ g++ /usr/bin/g++-12
-          sudo update-alternatives --config gcc
-          mkdir -p $HOME/linux/iphone/ $HOME/libplist
 
-      - name: Build ninja
-        run: |
-          git clone https://github.com/ninja-build/ninja.git
-          cd ninja
-          ./configure.py --bootstrap
-          sudo cp ninja /usr/local/bin/
-          ninja --version
-          cd $HOME
 
-      - name: Build libplist # doing this to get the static archive
-        run: |
-          ls /usr/include/openssl
-          git clone --depth=1 https://github.com/qnwerhtyycui/libplist
-          cd libplist
-          ./autogen.sh --prefix="$HOME/libplist" --without-cython
-          make -j$(nproc --all) install
+      - uses: qnwerhtyycui/run-on-arch-action@master
+        name: Build toolchain
+        with:
+          arch: i386
+          distro: alpine_latest
+          # Create an artifacts directory
+          setup: |
+            mkdir -p "${PWD}/artifacts"
 
-      - name: Build ldid
-        run: |
-          git clone --depth=1 https://github.com/qnwerhtyycui/ldid
-          cd ldid
-          make -j$(nproc --all) DESTDIR="$HOME/linux/iphone/" \
-            PREFIX="" \
-            LIBCRYPTO_LIBS="-l:libcrypto.a -lpthread -ldl" \
-            LIBPLIST_INCLUDES="-I$HOME/libplist/include" \
-            LIBPLIST_LIBS="$HOME/libplist/lib/libplist-2.0.a" \
-            install
+          # Mount the artifacts directory as /artifacts in the container
+          dockerRunArgs: |
+            --volume "${PWD}/artifacts:/artifacts"
 
-      - name: Build LLVM/Clang
-        run: |
-          mkdir build && cd build
-          cmake -G Ninja -DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi" \
-            -DLLVM_LINK_LLVM_DYLIB=ON \
-            -DLLVM_ENABLE_LIBXML2=OFF \
-            -DLLVM_ENABLE_ZLIB=OFF \
-            -DLLVM_ENABLE_Z3_SOLVER=OFF \
-            -DLLVM_ENABLE_BINDINGS=OFF \
-            -DLLVM_ENABLE_WARNINGS=OFF \
-            -DLLVM_TARGET_ARCH=X86 \
-            -DLLVM_BUILD_32_BITS=ON \
-            -DCMAKE_C_COMPILER=gcc \
-            -DCMAKE_CXX_COMPILER=g++ \
-            -DLLVM_INCLUDE_TESTS=OFF \
-            -DLLVM_INCLUDE_EXAMPLES=OFF \
-            -DLLVM_INCLUDE_UTILS=OFF \
-            -DLLVM_INCLUDE_BENCHMARKS=OFF \
-            -DLLVM_BUILD_TOOLS=OFF \
-            -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
-            -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
-            -DLLVM_INCLUDE_TESTS=OFF \
-            -DCLANG_INCLUDE_TESTS=OFF \
-            -DCMAKE_BUILD_TYPE=MinSizeRel \
-            -DCMAKE_INSTALL_PREFIX="$HOME/linux/iphone/" \
-            ../llvm
-          ninja -j$(nproc --all) install
+          install: |
+            apk update && apk upgrade
+            apk add bash
+            apk add sudo
+            apk add neofetch
 
-      # TODO
-      # - name: Build compiler-rt
-      #   run: |
-      #     mkdir build-compiler-rt && cd build-compiler-rt
-      #     cmake -G "Unix Makefiles" -DLLVM_ENABLE_PROJECTS="clang" \
-      #       -DLLVM_ENABLE_RUNTIMES="compiler-rt" \
-      #       -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
-      #       -DLLVM_INCLUDE_TESTS=OFF \
-      #       -DCLANG_INCLUDE_TESTS=OFF \
-      #       -DCOMPILER_RT_INCLUDE_TESTS=OFF \
-      #       -DCOMPILER_RT_BUILD_CRT=OFF \
-      #       -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
-      #       -DCOMPILER_RT_BUILD_PROFILE=OFF \
-      #       -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
-      #       -DCOMPILER_RT_BUILD_XRAY=OFF \
-      #       -DCOMPILER_RT_BUILD_BUILTINS=ON \
-      #       -DBUILTINS_CMAKE_ARGS="-DCOMPILER_RT_ENABLE_IOS=ON -DCOMPILER_RT_ENABLE_WATCHOS=ON -DCOMPILER_RT_ENABLE_TVOS=ON" \
-      #       -DCMAKE_BUILD_TYPE=MinSizeRel \
-      #       -DCMAKE_INSTALL_PREFIX="$HOME/linux/iphone/" \
-      #       ../llvm
-      #     make -j$(nproc --all) install-compiler-rt
+          run: |
+            neofetch
+            apk add build-base cmake ninja make zlib-dev git python3 python3-dev libgcc libstdc++ gcc autoconf automake openssl-dev openssl-libs-static coreutils libtool pkgconf
+            mkdir -p $HOME/linux/iphone/ $HOME/libplist
 
-      - name: Build tapi
-        run: |
-          git clone --depth=1 https://github.com/tpoechtrager/apple-libtapi
-          mkdir -p $HOME/cctools && cd apple-libtapi
-          mkdir build-tblgens && cd build-tblgens
-          cmake -G Ninja -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
-            -DLLVM_INCLUDE_TESTS=OFF \
-            -DLLVM_ENABLE_WARNINGS=OFF \
-            -DCLANG_INCLUDE_TESTS=OFF \
-            -DCMAKE_BUILD_TYPE=MinSizeRel \
-            -DLLVM_TARGET_ARCH=X86 \
-            -DLLVM_BUILD_32_BITS=ON \
-            ../src/llvm
-          ninja -j$(nproc --all) llvm-tblgen clang-tblgen
-          cd ../
+            echo "Build libplist"
+            git clone --depth=1 https://github.com/libimobiledevice/libplist
+            cd libplist
+            ./autogen.sh --prefix="$HOME/libplist" --without-cython
+            make -j$(nproc --all) install
 
-          mkdir build-tapi && cd build-tapi
-          cmake -G Ninja -DLLVM_ENABLE_PROJECTS="libtapi" \
-            -DLLVM_INCLUDE_TESTS=OFF \
-            -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
-            -DLLVM_ENABLE_WARNINGS=OFF \
-            -DLLVM_TARGET_ARCH=X86 \
-            -DLLVM_BUILD_32_BITS=ON \
-            -DTAPI_FULL_VERSION="$(cat $PWD/../VERSION.txt | grep "tapi" | grep -o '[[:digit:]].*')" \
-            -DLLVM_TABLEGEN="$PWD/../build-tblgens/bin/llvm-tblgen" \
-            -DCLANG_TABLEGEN="$PWD/../build-tblgens/bin/clang-tblgen" \
-            -DCLANG_TABLEGEN_EXE="$PWD/../build-tblgens/bin/clang-tblgen" \
-            -DCMAKE_BUILD_TYPE=MinSizeRel \
-            -DCMAKE_CXX_FLAGS="-I$PWD/../src/llvm/projects/clang/include/ -I$PWD/projects/clang/include/" \
-            -DCMAKE_INSTALL_PREFIX="$HOME/cctools/" \
-            ../src/llvm
-          ninja -j$(nproc --all) install-libtapi install-tapi-headers install-tapi
+            echo "Build ldid"
+            git clone --depth=1 https://github.com/ProcursusTeam/ldid
+            cd ldid
+            make -j$(nproc --all) DESTDIR="$HOME/linux/iphone/" \
+              PREFIX="" \
+              LIBCRYPTO_LIBS="-l:libcrypto.a -lpthread -ldl" \
+              LIBPLIST_INCLUDES="-I$HOME/libplist/include" \
+              LIBPLIST_LIBS="$HOME/libplist/lib/libplist-2.0.a" \
+              install
 
-      - name: Build cctools
-        run: |
-          git clone --depth=1 https://github.com/qnwerhtyycui/cctools-port
-          cd cctools-port/cctools
-          ./configure --prefix="$HOME/cctools/" \
-            --host=i386-pc-linux-gnu \
-            --target=aarch64-apple-darwin14 \
-            --enable-tapi-support \
-            --with-libtapi="$HOME/cctools/" \
-            --program-prefix="" \
-            CC="$HOME/linux/iphone/bin/clang" \
-            CXX="$HOME/linux/iphone/bin/clang++" \
-            CFLAGS="-m32" \
-            CXXFLAGS="-m32" \
-            CXXABI_LIB="-l:libc++abi.a" \
-            LDFLAGS="-Wl,-rpath,'\$\$ORIGIN/../lib' -Wl,-z,origin"
-          make -j$(nproc --all) install
-          cp -a $HOME/cctools/* $HOME/linux/iphone/
+            echo "Build LLVM/Clang"
+            mkdir build && cd build
+            cmake -G Ninja -DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi" \
+              -DLLVM_LINK_LLVM_DYLIB=ON \
+              -DLLVM_ENABLE_LIBXML2=OFF \
+              -DLLVM_ENABLE_ZLIB=OFF \
+              -DLLVM_ENABLE_Z3_SOLVER=OFF \
+              -DLLVM_ENABLE_BINDINGS=OFF \
+              -DLLVM_ENABLE_WARNINGS=OFF \
+              -DLLVM_TARGET_ARCH=X86 \
+              -DLLVM_BUILD_32_BITS=ON \
+              -DCMAKE_C_COMPILER=gcc \
+              -DCMAKE_CXX_COMPILER=g++ \
+              -DLLVM_INCLUDE_TESTS=OFF \
+              -DLLVM_INCLUDE_EXAMPLES=OFF \
+              -DLLVM_INCLUDE_UTILS=OFF \
+              -DLLVM_INCLUDE_BENCHMARKS=OFF \
+              -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
+              -DLLVM_INCLUDE_TESTS=OFF \
+              -DCLANG_INCLUDE_TESTS=OFF \
+              -DCMAKE_BUILD_TYPE=MinSizeRel \
+              -DCMAKE_INSTALL_PREFIX="$HOME/linux/iphone/" \
+              ../llvm
+            ninja -j$(nproc --all) install
 
-      - name: Prep build for release
-        run: |
-          cd $HOME
-          tar -cJvf iOSToolchain.tar.xz linux/iphone/
-          ls -l $HOME
+            echo "Build tapi"
+            git clone --depth=1 https://github.com/tpoechtrager/apple-libtapi
+            mkdir -p $HOME/cctools && cd apple-libtapi
+            mkdir build-tblgens && cd build-tblgens
+            cmake -G Ninja -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
+              -DLLVM_INCLUDE_TESTS=OFF \
+              -DLLVM_ENABLE_WARNINGS=OFF \
+              -DCLANG_INCLUDE_TESTS=OFF \
+              -DCMAKE_BUILD_TYPE=MinSizeRel \
+              -DLLVM_TARGET_ARCH=X86 \
+              -DLLVM_BUILD_32_BITS=ON \
+              ../src/llvm
+            ninja -j$(nproc --all) llvm-tblgen clang-tblgen
+            cd ../
+            mkdir build-tapi && cd build-tapi
+            cmake -G Ninja -DLLVM_ENABLE_PROJECTS="libtapi" \
+              -DLLVM_INCLUDE_TESTS=OFF \
+              -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
+              -DLLVM_ENABLE_WARNINGS=OFF \
+              -DLLVM_TARGET_ARCH=X86 \
+              -DLLVM_BUILD_32_BITS=ON \
+              -DTAPI_FULL_VERSION="$(cat $PWD/../VERSION.txt | grep "tapi" | grep -o '[[:digit:]].*')" \
+              -DLLVM_TABLEGEN="$PWD/../build-tblgens/bin/llvm-tblgen" \
+              -DCLANG_TABLEGEN="$PWD/../build-tblgens/bin/clang-tblgen" \
+              -DCLANG_TABLEGEN_EXE="$PWD/../build-tblgens/bin/clang-tblgen" \
+              -DCMAKE_BUILD_TYPE=MinSizeRel \
+              -DCMAKE_CXX_FLAGS="-I$PWD/../src/llvm/projects/clang/include/ -I$PWD/projects/clang/include/" \
+              -DCMAKE_INSTALL_PREFIX="$HOME/cctools/" \
+              ../src/llvm
+            ninja -j$(nproc --all) install-libtapi install-tapi-headers install-tapi
 
+            echo "Build cctools"
+            git clone --depth=1 https://github.com/qnwerhtyycui/cctools-port
+            cd cctools-port/cctools
+            ./configure --prefix="$HOME/cctools/" \
+              --target=aarch64-apple-darwin14 \
+              --enable-tapi-support \
+              --with-libtapi="$HOME/cctools/" \
+              --program-prefix="" \
+              CC="$HOME/linux/iphone/bin/clang" \
+              CXX="$HOME/linux/iphone/bin/clang++" \
+              CFLAGS="-m32" \
+              CXXFLAGS="-m32" \
+              CXXABI_LIB="-l:libc++abi.a" \
+              LDFLAGS="-Wl,-rpath,'\$\$ORIGIN/../lib' -Wl,-z,origin"
+            make -j$(nproc --all) install
+            cp -a $HOME/cctools/* $HOME/linux/iphone/
+
+            echo "Prep build for release"
+            cd $HOME
+            tar -cJvf iOSToolchain.tar.xz linux/iphone/
+
+            sudo cp -av $HOME/iOSToolchain.tar.xz /artifacts/iOSToolchain.tar.xz
+      
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:

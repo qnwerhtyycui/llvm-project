@@ -63,7 +63,7 @@ jobs:
 
             echo "Build LLVM/Clang"
             mkdir build && cd build
-            cmake -G Ninja -DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi" \
+            cmake -G Ninja -DLLVM_ENABLE_PROJECTS="clang" \
               -DLLVM_LINK_LLVM_DYLIB=ON \
               -DLLVM_ENABLE_LIBXML2=OFF \
               -DLLVM_ENABLE_ZLIB=OFF \
@@ -85,7 +85,7 @@ jobs:
               -DCMAKE_INSTALL_PREFIX="$HOME/linux/iphone/" \
               ../llvm
             ninja -j$(nproc --all) install
-            cd ,,/
+            cd ../
 
             echo "Build tapi"
             git clone --depth=1 https://github.com/tpoechtrager/apple-libtapi
@@ -117,6 +117,7 @@ jobs:
               -DCMAKE_INSTALL_PREFIX="$HOME/cctools/" \
               ../src/llvm
             ninja -j$(nproc --all) install-libtapi install-tapi-headers install-tapi
+            cd ../
 
             echo "Build cctools"
             git clone --depth=1 https://github.com/qnwerhtyycui/cctools-port

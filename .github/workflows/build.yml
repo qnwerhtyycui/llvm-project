@@ -23,7 +23,7 @@ jobs:
         name: Build toolchain
         with:
           arch: i386
-          distro: alpine3.14
+          distro: alpine_latest
           # Create an artifacts directory
           setup: |
             mkdir -p "${PWD}/artifacts"
